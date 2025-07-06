@@ -1,14 +1,16 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-2015 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <pow.h>
+#include "pow.h"
 
-#include <arith_uint256.h>
-#include <chain.h>
-#include <primitives/block.h>
-#include <uint256.h>
+#include "arith_uint256.h"
+#include "chain.h"
+#include "primitives/block.h"
+#include "uint256.h"
+#include "util.h"
+#include <stdio.h>
 
 static arith_uint256 GetTargetLimit(int64_t nTime, const Consensus::Params& params, bool fProofOfStake)
 {
@@ -26,27 +28,21 @@ static arith_uint256 GetTargetLimit(int64_t nTime, const Consensus::Params& para
     return UintToArith256(nLimit);
 }
 
-unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, const Consensus::Params& params, bool fProofOfStake)
+unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params, bool fProofOfStake)
 {
+    unsigned int nTargetLimit = GetTargetLimit(pindexLast->GetBlockTime(), params, fProofOfStake).GetCompact();
+
     // Genesis block
-    if (pindexLast == nullptr)
+    if (pindexLast == NULL)
         return UintToArith256(params.powLimit).GetCompact();
 
     const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
-    unsigned int nTargetLimit = GetTargetLimit(pindexLast->GetBlockTime(), params, fProofOfStake).GetCompact();
 
-    if (pindexPrev->pprev == nullptr)
+    if (pindexPrev->pprev == NULL)
         return nTargetLimit; // first block
     const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, fProofOfStake);
-    if (pindexPrevPrev->pprev == nullptr)
+    if (pindexPrevPrev->pprev == NULL)
         return nTargetLimit; // second block
-
-    // Mindiff for regtest
-    if (Params().GetChainType() == ChainType::REGTEST) {
-        arith_uint256 lowDiff;
-        lowDiff.SetCompact(0x207fffff);
-        return lowDiff.GetCompact();
-    }
 
     return CalculateNextTargetRequired(pindexPrev, pindexPrevPrev->GetBlockTime(), params, fProofOfStake);
 }
@@ -82,14 +78,6 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, int64_t 
         bnNew = bnTargetLimit;
 
     return bnNew.GetCompact();
-}
-
-// Check that on difficulty adjustments, the new difficulty does not increase
-// or decrease beyond the permitted limits.
-bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t height, uint32_t old_nbits, uint32_t new_nbits)
-{
-    // Blackcoin: skip this check as we are using different difficulty adjustment algo
-    return true;
 }
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
